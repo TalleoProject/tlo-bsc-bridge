@@ -1,0 +1,30 @@
+{
+  "name": "tlo-bsc-bridge",
+  "description": "Cryptocurrency bridge between Talleo (TLO) and Binance Smart Chain (BSC)",
+  "version": "1.0.0",
+  "license": "LGPL-2.0",
+  "authors": "Mika Lindqvist",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Talleo/tlo-bsc-bridge"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^3.0.1",
+    "async": ">=2.6.4",
+    "base58-native": "*",
+    "bech32-buffer": "*",
+    "bignum": "*",
+    "cli-color": "*",
+    "dateformat": "*",
+    "redis": "*",
+    "solc": "^0.6.12",
+    "web3": "*"
+  },
+  "engines": {
+    "node": "^8"
+  },
+  "scripts": {
+    "start": "node init.js",
+    "install": "make"
+  }
+}
