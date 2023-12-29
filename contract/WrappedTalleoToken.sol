@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: LGPL-2.0-or-later
-pragma solidity >= 0.6.0 <0.7.0;
+pragma solidity >= 0.8.0 <0.9.0;
 
-import "SafeMath.sol";
 import "IBEP20.sol";
 
 contract WrappedTalleoToken is IBEP20 {
 
-using SafeMath for uint256;
-
 string tokenName;
 string tokenSymbol;
 uint8 tokenDecimals;
-address payable owner;
+address payable private owner;
+address payable private _pendingOwner;
+address payable private deployer;
 uint256 tokenTotalSupply;
 mapping(address => uint256) balances;
 mapping(address => mapping(address => uint256)) allowed;
@@ -21,18 +20,66 @@ modifier onlyOwner() {
     _;
 }
 
-constructor(string memory _name, string memory _symbol, uint8 _decimals, uint256 _totalSupply) public {
-    owner = msg.sender;
+modifier onlyDeployer() {
+    require(msg.sender == deployer, "Only contract deployer can call this function.");
+    _;
+}
+
+constructor(string memory _name, string memory _symbol, uint8 _decimals, uint256 _totalSupply) {
+    owner = payable(msg.sender);
+    deployer = payable(msg.sender);
+    _pendingOwner = payable(address(0));
     tokenName = _name;
     tokenSymbol = _symbol;
     tokenDecimals = _decimals;
     tokenTotalSupply = _totalSupply;
     balances[owner] = _totalSupply;
     emit Transfer(address(0), owner, _totalSupply);
+    emit OwnershipTransferred(address(0), owner);
 }
 
 function getOwner() public override view returns (address) {
     return owner;
+}
+
+function pendingOwner() public view returns (address) {
+    return _pendingOwner;
+}
+
+function _transferOwnership(address payable newOwner) internal {
+    address payable _oldOwner = owner;
+    owner = newOwner;
+    emit OwnershipTransferred(_oldOwner, newOwner);
+}
+
+function transferOwnership(address payable newOwner) public onlyOwner {
+    require(newOwner != owner);
+    require(newOwner != address(0));
+    require(newOwner != address(this));
+    require(_pendingOwner == address(0));
+    if (msg.sender == deployer) {
+        _transferOwnership(newOwner);
+    } else {
+        _pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, _pendingOwner);
+    }
+}
+
+function cancelOwnershipTransfer() public onlyOwner {
+    require(_pendingOwner != address(0));
+    _pendingOwner = payable(address(0));
+}
+
+function approveOwnershipTransfer() public onlyDeployer {
+    require(_pendingOwner != address(0));
+    _transferOwnership(_pendingOwner);
+    _pendingOwner = payable(address(0));
+}
+
+function recoverOwnership() public onlyDeployer {
+    require(owner != deployer);
+    _transferOwnership(deployer);
+    _pendingOwner = payable(address(0));
 }
 
 function name() public override view returns (string memory) {
@@ -52,7 +99,11 @@ function totalSupply() public override view returns (uint256) {
 }
 
 function circulatingSupply() public view returns (uint256) {
-    return tokenTotalSupply.sub(balances[owner]).sub(balances[address(this)]).sub(balances[address(0)]);
+    uint256 supply = tokenTotalSupply - balances[owner] - balances[address(this)] - balances[address(0)];
+    if (owner != deployer) {
+        supply -= balances[deployer];
+    }
+    return supply;
 }
 
 function balanceOf(address _owner) public override view returns (uint256) {
@@ -62,8 +113,8 @@ function balanceOf(address _owner) public override view returns (uint256) {
 function _transfer(address _from, address _to, uint256 _value) internal {
     require(balances[_from] >= _value);
 
-    balances[_from] = balances[_from].sub(_value);
-    balances[_to] = balances[_to].add(_value);
+    balances[_from] -= _value;
+    balances[_to] += _value;
 
     emit Transfer(_from, _to, _value);
 }
@@ -78,13 +129,13 @@ function allowance(address _owner, address _spender) public override view return
 }
 
 function increaseAllowance(address _spender, uint256 _addedValue) public returns (bool) {
-    uint256 _value = allowed[msg.sender][_spender].add(_addedValue);
+    uint256 _value = allowed[msg.sender][_spender] + _addedValue;
     _approve(msg.sender, _spender, _value);
     return true;
 }
 
 function decreaseAllowance(address _spender, uint256 _subtractedValue) public returns (bool) {
-    uint256 _value = allowed[msg.sender][_spender].sub(_subtractedValue, "BEP20: Can't decrease allowance below zero");
+    uint256 _value = allowed[msg.sender][_spender] - _subtractedValue;
     _approve(msg.sender, _spender, _value);
     return true;
 }
@@ -106,7 +157,7 @@ function approve(address _spender, uint256 _value) public override returns (bool
 function transferFrom(address _from, address _to, uint256 _value) public override returns (bool) {
     require(allowed[_from][msg.sender] >= _value);
     _transfer(_from, _to, _value);
-    allowed[_from][msg.sender] = allowed[_from][msg.sender].sub(_value);
+    allowed[_from][msg.sender] -= _value;
     return true;
 }
 
@@ -148,10 +199,6 @@ function sendBEP20(IBEP20 _token, address _to, uint256 _value) public onlyOwner 
     return _token.transfer(_to, _value);
 }
 
-function Selfdestructs() public onlyOwner {
-    selfdestruct(owner);
-}
-
 function convertTo(bytes memory _to, uint256 _value) public returns (bool) {
     require(_to.length == 71);
     _transfer(msg.sender, owner, _value);
@@ -172,6 +219,10 @@ function convertFrom(bytes memory _from, address _to, uint256 _value) public onl
     emit ConversionFrom(_from, _to, _value);
     return true;
 }
+
+event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+
+event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
 event Received(address indexed _from, uint256 _value);
 

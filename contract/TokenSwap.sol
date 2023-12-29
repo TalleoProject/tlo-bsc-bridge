@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.0-or-later
-pragma solidity >= 0.6.0 <0.7.0;
+pragma solidity >= 0.8.0 <0.9.0;
 import "IBEP20.sol";
-import "SafeMath.sol";
 
 contract TokenSwap {
-
-using SafeMath for uint256;
 
 address payable owner;
 IBEP20 firstToken;
@@ -18,8 +15,8 @@ modifier onlyOwner() {
     _;
 }
 
-constructor(IBEP20 _first, IBEP20 _second, uint256 _conversionMultiplier, uint256 _conversionDivisor) public {
-    owner = msg.sender;
+constructor(IBEP20 _first, IBEP20 _second, uint256 _conversionMultiplier, uint256 _conversionDivisor) {
+    owner = payable(msg.sender);
     firstToken = _first;
     secondToken = _second;
     conversionMultiplier = _conversionMultiplier;
@@ -28,7 +25,7 @@ constructor(IBEP20 _first, IBEP20 _second, uint256 _conversionMultiplier, uint25
 
 function swap(uint256 _value) public returns (bool) {
     uint256 swapBalance = secondToken.balanceOf(address(this));
-    uint256 secondValue = _value.mul(conversionMultiplier).div(conversionDivisor);
+    uint256 secondValue = _value * conversionMultiplier / conversionDivisor;
     require(secondValue > 0, "Nothing to swap");
     require(secondValue <= swapBalance, "Not enough tokens in the reserve");
     uint256 allowance = firstToken.allowance(msg.sender, address(this));

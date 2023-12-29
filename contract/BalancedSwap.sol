@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.0-or-later
-pragma solidity >= 0.6.0 <0.7.0;
+pragma solidity >= 0.8.0 <0.9.0;
 import "IBEP20.sol";
-import "SafeMath.sol";
 
 contract BalancedSwap {
-
-using SafeMath for uint256;
 
 address payable owner;
 IBEP20 firstToken;
@@ -18,8 +15,8 @@ modifier onlyOwner() {
     _;
 }
 
-constructor(IBEP20 _first, IBEP20 _second, uint256 _feeMultiplier, uint256 _feeDivisor) public {
-    owner = msg.sender;
+constructor(IBEP20 _first, IBEP20 _second, uint256 _feeMultiplier, uint256 _feeDivisor) {
+    owner = payable(msg.sender);
     firstToken = _first;
     secondToken = _second;
     feeMultiplier = _feeMultiplier;
@@ -27,10 +24,10 @@ constructor(IBEP20 _first, IBEP20 _second, uint256 _feeMultiplier, uint256 _feeD
 }
 
 function _swap(address _from, IBEP20 _fromToken, IBEP20 _toToken, uint256 _fromValue) internal returns (bool) {
-    uint256 firstBalance = _fromToken.balanceOf(address(this)).add(_fromValue);
+    uint256 firstBalance = _fromToken.balanceOf(address(this)) + _fromValue;
     uint256 secondBalance = _toToken.balanceOf(address(this));
-    uint256 toValue = _fromValue.mul(secondBalance).div(firstBalance);
-    toValue = toValue.sub(toValue.mul(feeMultiplier).div(feeDivisor));
+    uint256 toValue = _fromValue * secondBalance / firstBalance;
+    toValue -= toValue * feeMultiplier / feeDivisor;
     require(toValue > 0, "Nothing to swap");
     require(toValue <= secondBalance, "Not enough tokens in the reserve");
     uint256 allowance = firstToken.allowance(_from, address(this));
